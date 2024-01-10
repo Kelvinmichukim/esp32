@@ -1,0 +1,27 @@
+# 6.&nbsp;Convert Model to TensorFlow Lite
+
+Alright! Our model is all trained up and ready to be used for detecting objects. First, we need to export the model graph (a file that contains information about the architecture and weights) to a TensorFlow Lite-compatible format. We'll do this using the `export_tflite_graph_tf2.py` script.
+
+# Make a directory to store the trained TFLite model
+!mkdir /content/custom_model_lite
+output_directory = '/content/custom_model_lite'
+
+# Path to training directory (the conversion script automatically chooses the highest checkpoint file)
+last_model_path = '/content/training'
+
+!python /content/models/research/object_detection/export_tflite_graph_tf2.py \
+    --trained_checkpoint_dir {last_model_path} \
+    --output_directory {output_directory} \
+    --pipeline_config_path {pipeline_file}
+
+
+Next, we'll take the exported graph and use the `TFLiteConverter` module to convert it to `.tflite` FlatBuffer format.
+
+# Convert exported graph file into TFLite model file
+import tensorflow as tf
+
+converter = tf.lite.TFLiteConverter.from_saved_model('/content/custom_model_lite/saved_model')
+tflite_model = converter.convert()
+
+with open('/content/custom_model_lite/detect.tflite', 'wb') as f:
+  f.write(tflite_model)

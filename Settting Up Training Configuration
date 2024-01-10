@@ -1,0 +1,159 @@
+# 4.&nbsp;Set Up Training Configuration
+
+In this section, we'll set up the model and training configuration. We'll specifiy which pretrained TensorFlow model we want to use from the [TensorFlow 2 Object Detection Model Zoo](https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/tf2_detection_zoo.md). Each model also comes with a configuration file that points to file locations, sets training parameters (such as learning rate and total number of training steps), and more. We'll modify the configuration file for our custom training job.
+
+The first section of code lists out some models availabe in the TF2 Model Zoo and defines some filenames that will be used later to download the model and config file. This makes it easy to manage which model you're using and to add other models to the list later.
+
+Set the "chosen_model" variable to match the name of the model you'd like to train with. It's currently set to use the popular "ssd-mobilenet-v2" model. Click play on the next block once the chosen model has been set.
+
+Not sure which model to pick? [Check out my blog post comparing each model's speed and accuracy.](https://ejtech.io/learn/tflite-object-detection-model-comparison)
+
+# Change the chosen_model variable to deploy different models available in the TF2 object detection zoo
+chosen_model = 'ssd-mobilenet-v2-fpnlite-320'
+
+MODELS_CONFIG = {
+    'ssd-mobilenet-v2': {
+        'model_name': 'ssd_mobilenet_v2_320x320_coco17_tpu-8',
+        'base_pipeline_file': 'ssd_mobilenet_v2_320x320_coco17_tpu-8.config',
+        'pretrained_checkpoint': 'ssd_mobilenet_v2_320x320_coco17_tpu-8.tar.gz',
+    },
+    'efficientdet-d0': {
+        'model_name': 'efficientdet_d0_coco17_tpu-32',
+        'base_pipeline_file': 'ssd_efficientdet_d0_512x512_coco17_tpu-8.config',
+        'pretrained_checkpoint': 'efficientdet_d0_coco17_tpu-32.tar.gz',
+    },
+    'ssd-mobilenet-v2-fpnlite-320': {
+        'model_name': 'ssd_mobilenet_v2_fpnlite_320x320_coco17_tpu-8',
+        'base_pipeline_file': 'ssd_mobilenet_v2_fpnlite_320x320_coco17_tpu-8.config',
+        'pretrained_checkpoint': 'ssd_mobilenet_v2_fpnlite_320x320_coco17_tpu-8.tar.gz',
+    },
+    # The centernet model isn't working as of 9/10/22
+    #'centernet-mobilenet-v2': {
+    #    'model_name': 'centernet_mobilenetv2fpn_512x512_coco17_od',
+    #    'base_pipeline_file': 'pipeline.config',
+    #    'pretrained_checkpoint': 'centernet_mobilenetv2fpn_512x512_coco17_od.tar.gz',
+    #}
+}
+
+model_name = MODELS_CONFIG[chosen_model]['model_name']
+pretrained_checkpoint = MODELS_CONFIG[chosen_model]['pretrained_checkpoint']
+base_pipeline_file = MODELS_CONFIG[chosen_model]['base_pipeline_file']
+
+Download the pretrained model file and configuration file by clicking Play on the following section.
+
+# Create "mymodel" folder for holding pre-trained weights and configuration files
+%mkdir /content/models/mymodel/
+%cd /content/models/mymodel/
+
+# Download pre-trained model weights
+import tarfile
+download_tar = 'http://download.tensorflow.org/models/object_detection/tf2/20200711/' + pretrained_checkpoint
+!wget {download_tar}
+tar = tarfile.open(pretrained_checkpoint)
+tar.extractall()
+tar.close()
+
+# Download training configuration file for model
+download_config = 'https://raw.githubusercontent.com/tensorflow/models/master/research/object_detection/configs/tf2/' + base_pipeline_file
+!wget {download_config}
+
+Now that we've downloaded our model and config file, we need to modify the configuration file with some high-level training parameters. The following variables are used to control training steps:
+
+* **num_steps**: The total amount of steps to use for training the model. A good number to start with is 40,000 steps. You can use more steps if you notice the loss metrics are still decreasing by the time training finishes. The more steps, the longer training will take. Training can also be stopped early if loss flattens out before reaching the specified number of steps.
+* **batch_size**: The number of images to use per training step. A larger batch size allows a model to be trained in fewer steps, but the size is limited by the GPU memory available for training. With the GPUs used in Colab instances, 16 is a good number for SSD models and 4 is good for EfficientDet models.
+
+Other training information, like the location of the pretrained model file, the config file, and total number of classes are also assigned in this step. To learn more about training configuration with the TensorFlow Object Detection API, read this [article from Neptune](https://neptune.ai/blog/tensorflow-object-detection-api-best-practices-to-training-evaluation-deployment).
+
+# Set training parameters for the model
+num_steps = 40000
+
+if chosen_model == 'efficientdet-d0':
+  batch_size = 4
+else:
+  batch_size = 16
+
+# Set file locations and get number of classes for config file
+pipeline_fname = '/content/models/mymodel/' + base_pipeline_file
+fine_tune_checkpoint = '/content/models/mymodel/' + model_name + '/checkpoint/ckpt-0'
+
+def get_num_classes(pbtxt_fname):
+    from object_detection.utils import label_map_util
+    label_map = label_map_util.load_labelmap(pbtxt_fname)
+    categories = label_map_util.convert_label_map_to_categories(
+        label_map, max_num_classes=90, use_display_name=True)
+    category_index = label_map_util.create_category_index(categories)
+    return len(category_index.keys())
+num_classes = get_num_classes(label_map_pbtxt_fname)
+print('Total classes:', num_classes)
+
+
+Next, we'll rewrite the config file to use the training parameters we just specified. The following section of code will automatically replace the necessary parameters in the downloaded .config file and save it as our custom "pipeline_file.config" file.
+
+# Create custom configuration file by writing the dataset, model checkpoint, and training parameters into the base pipeline file
+import re
+
+%cd /content/models/mymodel
+print('writing custom configuration file')
+
+with open(pipeline_fname) as f:
+    s = f.read()
+with open('pipeline_file.config', 'w') as f:
+
+    # Set fine_tune_checkpoint path
+    s = re.sub('fine_tune_checkpoint: ".*?"',
+               'fine_tune_checkpoint: "{}"'.format(fine_tune_checkpoint), s)
+
+    # Set tfrecord files for train and test datasets
+    s = re.sub(
+        '(input_path: ".*?)(PATH_TO_BE_CONFIGURED/train)(.*?")', 'input_path: "{}"'.format(train_record_fname), s)
+    s = re.sub(
+        '(input_path: ".*?)(PATH_TO_BE_CONFIGURED/val)(.*?")', 'input_path: "{}"'.format(val_record_fname), s)
+
+    # Set label_map_path
+    s = re.sub(
+        'label_map_path: ".*?"', 'label_map_path: "{}"'.format(label_map_pbtxt_fname), s)
+
+    # Set batch_size
+    s = re.sub('batch_size: [0-9]+',
+               'batch_size: {}'.format(batch_size), s)
+
+    # Set training steps, num_steps
+    s = re.sub('num_steps: [0-9]+',
+               'num_steps: {}'.format(num_steps), s)
+
+    # Set number of classes num_classes
+    s = re.sub('num_classes: [0-9]+',
+               'num_classes: {}'.format(num_classes), s)
+
+    # Change fine-tune checkpoint type from "classification" to "detection"
+    s = re.sub(
+        'fine_tune_checkpoint_type: "classification"', 'fine_tune_checkpoint_type: "{}"'.format('detection'), s)
+
+    # If using ssd-mobilenet-v2, reduce learning rate (because it's too high in the default config file)
+    if chosen_model == 'ssd-mobilenet-v2':
+      s = re.sub('learning_rate_base: .8',
+                 'learning_rate_base: .08', s)
+
+      s = re.sub('warmup_learning_rate: 0.13333',
+                 'warmup_learning_rate: .026666', s)
+
+    # If using efficientdet-d0, use fixed_shape_resizer instead of keep_aspect_ratio_resizer (because it isn't supported by TFLite)
+    if chosen_model == 'efficientdet-d0':
+      s = re.sub('keep_aspect_ratio_resizer', 'fixed_shape_resizer', s)
+      s = re.sub('pad_to_max_dimension: true', '', s)
+      s = re.sub('min_dimension', 'height', s)
+      s = re.sub('max_dimension', 'width', s)
+
+    f.write(s)
+
+
+(Optional) If you're curious, you can display the configuration file's contents here in the browser by running the line of code below.
+
+# (Optional) Display the custom configuration file's contents
+!cat /content/models/mymodel/pipeline_file.config
+
+Finally, let's set the locations of the configuration file and model output directory as variables so we can reference them when we call the training command.
+
+# Set the path to the custom config file and the directory to store training checkpoints in
+pipeline_file = '/content/models/mymodel/pipeline_file.config'
+model_dir = '/content/training/'

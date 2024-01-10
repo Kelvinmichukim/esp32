@@ -1,0 +1,43 @@
+#2.&nbsp;Install TensorFlow Object Detection Dependencies
+
+First, we'll install the TensorFlow Object Detection API in this Google Colab instance. This requires cloning the [TensorFlow models repository](https://github.com/tensorflow/models) and running a couple installation commands. Click the play button to run the following sections of code.
+
+The latest version of TensorFlow this Colab has been verified to work with is TF v2.8.0.
+
+
+
+# Clone the tensorflow models repository from GitHub
+!pip uninstall Cython -y # Temporary fix for "No module named 'object_detection'" error
+!git clone --depth 1 https://github.com/tensorflow/models
+
+# Copy setup files into models/research folder
+%%bash
+cd models/research/
+protoc object_detection/protos/*.proto --python_out=.
+#cp object_detection/packages/tf2/setup.py .
+
+# Modify setup.py file to install the tf-models-official repository targeted at TF v2.8.0
+import re
+with open('/content/models/research/object_detection/packages/tf2/setup.py') as f:
+    s = f.read()
+
+with open('/content/models/research/setup.py', 'w') as f:
+    # Set fine_tune_checkpoint path
+    s = re.sub('tf-models-official>=2.5.1',
+               'tf-models-official==2.8.0', s)
+    f.write(s)
+
+# Install the Object Detection API
+# Need to do a temporary fix with PyYAML because Colab isn't able to install PyYAML v5.4.1
+!pip install pyyaml==5.3
+!pip install /content/models/research/
+
+# Need to downgrade to TF v2.8.0 due to Colab compatibility bug with TF v2.10 (as of 10/03/22)
+!pip install tensorflow==2.8.0
+
+You may get warnings or errors related to package dependencies in the previous code block, but you can ignore them for now.
+
+Let's test our installation by running `model_builder_tf2_test.py` to make sure everything is working as expected. Run the following code block and confirm that it finishes without errors. If you get errors, try Googling them or checking the FAQ at the end of this Colab.
+
+# Run Model Bulider Test file, just to verify everything's working properly
+!python /content/models/research/object_detection/builders/model_builder_tf2_test.py

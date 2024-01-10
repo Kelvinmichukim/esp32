@@ -1,0 +1,14 @@
+#1. Gather and Label Training Images
+
+#Before we start training, we need to gather and label images that will be used for training the object detection model. A good starting point for a proof-of-concept model is 200 images. The training images should have random objects in the image along with the desired objects, and should have a variety of backgrounds and lighting conditions.
+
+#Watch the YouTube video below for instructions and tips on how to gather and label images for training an object detection model.
+
+#<p align=center>
+#<a href="https://www.youtube.com/watch?v=v0ssiOY6cfg" target="_blank"><img src="https://s3.us-west-1.amazonaws.com/evanjuras.com/img/thumbnail-capture-label-data.png" height="240"><br>
+#<i>Watch this video to learn how to capture and label images.</i></a>
+#</p>
+
+#When you've finished gathering and labeling images, you should have a folder full of images and corresponding .xml data annotation file for each image. An example of a labeled image and the image folder for my coin detector model are shown below.
+
+#![](https://raw.githubusercontent.com/EdjeElectronics/TensorFlow-Lite-Object-Detection-on-Android-and-Raspberry-Pi/master/doc/labeled_image_example2.png)
